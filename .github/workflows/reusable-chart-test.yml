@@ -1,0 +1,107 @@
+# Lint the Helm chart, install it into a throwaway kind cluster in the runner, smoke-test /healthz.
+# Called from app repos as: sockstabby/platform/.github/workflows/reusable-chart-test.yml@v1
+name: reusable-chart-test
+
+on:
+  workflow_call:
+    inputs:
+      chart-path:
+        type: string
+        default: "chart"
+      values-file:
+        description: "Values file (relative to chart-path) used for the kind install"
+        type: string
+        default: "values-local.yaml"
+      release-name:
+        description: "Helm release / service name"
+        type: string
+        required: true
+      context:
+        description: "Docker build context"
+        type: string
+        default: "."
+      health-path:
+        type: string
+        default: "/healthz"
+      helm-version:
+        type: string
+        default: "v4.3.1"
+      kind-node-image:
+        description: "kindest/node image (pinned by digest; from kind v0.33.0 release notes)"
+        type: string
+        default: "kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5"
+
+permissions: {}
+
+jobs:
+  chart-test:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      CI_IMAGE: ci-image:${{ github.sha }}
+      RELEASE: ${{ inputs.release-name }}
+      CHART: ${{ inputs.chart-path }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ inputs.helm-version }}
+
+      - name: helm lint (every values file)
+        run: |
+          helm lint "$CHART"
+          for f in "$CHART"/values-*.yaml; do
+            echo "::group::helm lint -f $f"; helm lint "$CHART" -f "$f"; echo "::endgroup::"
+          done
+
+      - name: Create kind cluster
+        uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+        with:
+          version: v0.33.0
+          node_image: ${{ inputs.kind-node-image }}
+          cluster_name: chart-test
+          wait: 120s
+
+      - name: Build image and load into kind
+        env:
+          CONTEXT: ${{ inputs.context }}
+        run: |
+          docker build --build-arg APP_VERSION="${GITHUB_SHA::7}" -t "$CI_IMAGE" "$CONTEXT"
+          kind load docker-image "$CI_IMAGE" --name chart-test
+
+      - name: helm install
+        env:
+          VALUES: ${{ inputs.values-file }}
+        run: |
+          helm upgrade --install "$RELEASE" "$CHART" \
+            -f "$CHART/$VALUES" \
+            --set image.repository="${CI_IMAGE%%:*}" \
+            --set image.tag="${CI_IMAGE##*:}" \
+            --set image.pullPolicy=Never \
+            --wait --timeout 3m
+          kubectl rollout status "deploy/$RELEASE" --timeout=120s
+
+      - name: Smoke test via port-forward
+        env:
+          HEALTH: ${{ inputs.health-path }}
+        run: |
+          kubectl port-forward "svc/$RELEASE" 18080:80 >/tmp/pf.log 2>&1 &
+          PF=$!
+          trap 'kill $PF 2>/dev/null || true' EXIT
+          for _ in $(seq 1 30); do curl -sf -o /dev/null "http://localhost:18080${HEALTH}" && break; sleep 1; done
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:18080${HEALTH}")
+          echo "${HEALTH} -> ${code}"
+          echo "### Smoke test: \`${HEALTH}\` -> ${code}" >> "$GITHUB_STEP_SUMMARY"
+          test "$code" = 200
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl get all -A || true
+          kubectl describe pods -l "app.kubernetes.io/instance=$RELEASE" || true
+          kubectl logs -l "app.kubernetes.io/instance=$RELEASE" --tail=200 || true
+          kubectl get events --sort-by=.lastTimestamp | tail -50 || true
