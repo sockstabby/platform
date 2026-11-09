@@ -13,8 +13,8 @@ terraform init
 terraform plan -out bootstrap.tfplan
 terraform apply bootstrap.tfplan
 
-# then move this state into the bucket it just created:
-#   uncomment the backend "s3" block in versions.tf
+# first run on a new account only: the backend "s3" block must be commented out for the
+# first apply (the bucket doesn't exist yet), then uncomment it and move the state:
 terraform init -migrate-state
 ```
 

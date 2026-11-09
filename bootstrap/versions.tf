@@ -11,16 +11,16 @@ terraform {
     }
   }
 
-  # Bootstrap starts with LOCAL state (the bucket does not exist yet). After the first apply,
-  # uncomment this block and run `terraform init -migrate-state` to move the state into the bucket.
-  # Backend blocks cannot use variables, so the region is hard-coded here.
-  # backend "s3" {
-  #   bucket       = "modern-cloud-stack-tfstate-708884111549"
-  #   key          = "bootstrap/terraform.tfstate"
-  #   region       = "us-east-2"
-  #   encrypt      = true
-  #   use_lockfile = true
-  # }
+  # Bootstrap's own state lives in the bucket it creates. First-ever run on a new account: comment
+  # this block out, apply with local state, then uncomment and `terraform init -migrate-state`.
+  # Backend blocks cannot use variables, so the region is hard-coded here (the one place it is).
+  backend "s3" {
+    bucket       = "modern-cloud-stack-tfstate-708884111549"
+    key          = "bootstrap/terraform.tfstate"
+    region       = "us-east-2"
+    encrypt      = true
+    use_lockfile = true # native S3 locking (Terraform >= 1.10), no DynamoDB table
+  }
 }
 
 provider "aws" {
