@@ -1,0 +1,22 @@
+# Spacelift runtime configuration (must live at the repo root). Applies to all six stacks.
+# https://docs.spacelift.io/concepts/configuration/runtime-configuration/runtime-yaml-reference
+version: "1"
+
+stack_defaults:
+  environment:
+    # THE single Terraform version source. Every `required_version` and .tool-versions must match;
+    # scripts/check-terraform-version.sh enforces it (in the install hook and in CI).
+    TERRAFORM_VERSION: "1.17.1"
+    AWS_REGION: us-east-2
+    AWS_DEFAULT_REGION: us-east-2
+
+  # Spacelift's Custom workflow tool does not download Terraform, so every phase that runs a
+  # terraform command installs it first. The script is idempotent. before_apply/before_destroy are
+  # REQUIRED, not belt-and-braces: a run that pauses for confirmation (prod: autodeploy off) resumes
+  # without the tools installed in earlier phases (Spacelift docs, workflow-tool page).
+  before_init:
+    - sh /mnt/workspace/source/.spacelift/install-terraform.sh
+  before_apply:
+    - sh /mnt/workspace/source/.spacelift/install-terraform.sh
+  before_destroy:
+    - sh /mnt/workspace/source/.spacelift/install-terraform.sh

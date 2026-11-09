@@ -1,0 +1,21 @@
+# Fails if any required_version or .tool-versions drifts from TERRAFORM_VERSION in .spacelift/config.yml.
+name: terraform-version-check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Terraform version drift check
+        run: sh scripts/check-terraform-version.sh

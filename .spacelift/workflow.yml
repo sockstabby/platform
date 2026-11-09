@@ -1,0 +1,17 @@
+# Custom workflow for Spacelift's "Custom" workflow tool. Schema and template variables follow
+# https://docs.spacelift.io/vendors/terraform/workflow-tool (keys: init, workspaceSelect,
+# workspaceNew, plan, showState, showPlan, getOutputs, apply, destroy).
+#
+# The binary is called by absolute path: install-terraform.sh puts it in /mnt/workspace/.bin, and a
+# PATH change made inside a hook is not guaranteed to reach the next command.
+# Var files / backend config come from TF_CLI_ARGS_* env vars on each stack, which Terraform itself
+# reads (see docs/spacelift-setup.md). Never add -detailed-exitcode: any non-zero exit fails the run.
+init: /mnt/workspace/.bin/terraform init -input=false
+workspaceSelect: /mnt/workspace/.bin/terraform workspace select "{{ .WorkspaceName }}"
+workspaceNew: /mnt/workspace/.bin/terraform workspace new "{{ .WorkspaceName }}"
+plan: /mnt/workspace/.bin/terraform plan -input=false -lock={{ .Lock }} {{ if not .Refresh }}-refresh=false {{ end }}-out={{ .PlanFileName }} {{ range .Targets }}-target='{{ . }}' {{ end }}
+showState: /mnt/workspace/.bin/terraform show -json
+showPlan: /mnt/workspace/.bin/terraform show -json "{{ .PlanFileName }}"
+getOutputs: /mnt/workspace/.bin/terraform output -json
+apply: /mnt/workspace/.bin/terraform apply -auto-approve -input=false "{{ .PlanFileName }}"
+destroy: /mnt/workspace/.bin/terraform destroy -auto-approve -input=false

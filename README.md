@@ -2,6 +2,37 @@
 
 > Full README (architecture, design decisions, costs) is written in Phase 7.
 
+## Design decision: Terraform via Spacelift's Custom workflow
+
+**Choice:** HashiCorp Terraform 1.17.1 (exact pin), run by Spacelift through its *Custom* workflow
+tool (`.spacelift/workflow.yml`), with a hook (`.spacelift/install-terraform.sh`) that downloads
+the pinned release and verifies its SHA256 checksum before every phase that runs Terraform.
+
+**Why Custom is needed:** Spacelift supplies only open-source Terraform (MPL 2.0, up to 1.5.7) and
+OpenTofu. Releases after 1.5.7 are under the Business Source License 1.1, so Spacelift won't
+download them for us. We need >= 1.10 for native S3 state locking (`use_lockfile`), so we bring
+our own binary.
+
+**Licensing:** my reading of BSL 1.1 and
+[HashiCorp's licensing FAQ](https://www.hashicorp.com/license-faq) is that using Terraform to
+manage your own infrastructure is permitted, and that the restriction targets products offered
+to third parties that compete with HashiCorp's (see the FAQ's questions on "competitive offering"
+and on hosting internally). This is not a legal conclusion; anyone adopting this pattern
+commercially should check with their own counsel.
+
+**Costs of this choice:**
+- We own a supply-chain step: the hook downloads a binary on every run. Mitigated by an exact
+  version pin and checksum verification. (Verifying the `SHA256SUMS.sig` GPG signature is a next
+  step.)
+- More moving parts than a built-in tool: hooks are needed before init, apply **and** destroy,
+  because a run paused for confirmation resumes without previously installed tools.
+- One version must stay consistent in several places: `TERRAFORM_VERSION` in
+  `.spacelift/config.yml` is the single source, and `scripts/check-terraform-version.sh`
+  (Spacelift hook + CI) fails on any drift.
+
+**Production alternative:** bake Terraform into a custom runner image (no per-run download), or
+use OpenTofu, which Spacelift supports natively and which is a drop-in replacement.
+
 ## Reusable workflow versioning
 
 App repos call the workflows in this repo by **major tag**, e.g.

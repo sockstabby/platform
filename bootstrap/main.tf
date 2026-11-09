@@ -3,6 +3,9 @@ data "aws_caller_identity" "current" {}
 locals {
   account_id   = data.aws_caller_identity.current.account_id
   state_bucket = "${var.project}-tfstate-${local.account_id}" # account ID keeps the global name unique
+  # Built from the name (not aws_s3_bucket.state.arn) so the bucket policy document is known at
+  # plan time; otherwise any pending bucket change (even a tag) makes the policy "known after apply".
+  state_bucket_arn = "arn:aws:s3:::${local.state_bucket}"
 }
 
 # -----------------------------------------------------------------------------
@@ -72,8 +75,8 @@ data "aws_iam_policy_document" "state_bucket" {
     effect  = "Deny"
     actions = ["s3:*"]
     resources = [
-      aws_s3_bucket.state.arn,
-      "${aws_s3_bucket.state.arn}/*",
+      local.state_bucket_arn,
+      "${local.state_bucket_arn}/*",
     ]
     principals {
       type        = "*"
