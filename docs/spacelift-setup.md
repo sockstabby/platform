@@ -1,6 +1,6 @@
 # Spacelift setup (manual, in the Spacelift UI)
 
-Account: `sockstabby` (`https://sockstabby.app.spacelift.io`), Free plan.
+Account: `sockstabby` (`https://sockstabby.app.us.spacelift.io`, US region; AWS principal 577638371743), Free plan.
 
 Terraform is **HashiCorp Terraform 1.17.1**, run through Spacelift's **Custom** workflow tool.
 Spacelift only supplies open-source Terraform (MPL, <= 1.5.7) and OpenTofu, so it will not

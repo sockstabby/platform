@@ -11,7 +11,7 @@ variable "project" {
 }
 
 variable "spacelift_account_name" {
-  description = "Spacelift account name (the <name> in https://<name>.app.spacelift.io)."
+  description = "Spacelift account name (the <name> in https://<name>.app.us.spacelift.io)."
   type        = string
   default     = "sockstabby"
 }
@@ -19,7 +19,7 @@ variable "spacelift_account_name" {
 variable "spacelift_aws_principal" {
   description = "AWS account Spacelift SaaS assumes roles from. spacelift.io = 324880187172 (us.spacelift.io = 577638371743). Per Spacelift docs, checked 2026-11-09."
   type        = string
-  default     = "324880187172"
+  default     = "577638371743" # account is hosted at sockstabby.app.us.spacelift.io (US region)
 }
 
 variable "spacelift_stacks" {
