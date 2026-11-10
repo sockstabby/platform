@@ -1,4 +1,4 @@
-# Spacelift setup (manual, in the Spacelift UI)
+# Spacelift setup (UI steps, or the GraphQL API)
 
 Account: `sockstabby` (`https://sockstabby.app.us.spacelift.io`, US region; AWS principal 577638371743), Free plan.
 
@@ -84,6 +84,37 @@ For **each** stack (**Ship Infra → Stacks → Create stack**):
 Apply order: `network → github-oidc → eks`. Destroy in reverse. One public worker on Free means
 runs are serialized; trigger the next stack as soon as the previous one starts applying.
 
+## Alternative: the same setup through the API (how this repo was actually set up)
+
+Every UI step above maps to one GraphQL mutation. Log in once (browser), then call the API with
+the CLI's token:
+
+```sh
+mise exec spacectl@1.29.1 -- spacectl profile login --method browser \
+  --endpoint https://sockstabby.app.us.spacelift.io sockstabby
+TOKEN=$(mise exec spacectl@1.29.1 -- spacectl profile export-token)
+gql() { jq -n --arg q "$1" --argjson v "${2:-null}" '{query:$q,variables:$v}' |
+  curl -s https://sockstabby.app.us.spacelift.io/graphql \
+    -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d @-; }
+```
+
+| UI step | Mutation (field names checked by schema introspection, 2026-11-09) |
+|---|---|
+| AWS integration | `awsIntegrationCreate(name, roleArn, generateCredentialsInWorker:false, durationSeconds:3600, space:"root")` |
+| Create stack | `stackCreate(manageState:false, slug:"<name>", input:{name, repository:"platform", namespace:"sockstabby", branch:"main", provider:GITHUB, projectRoot, space:"root", autodeploy, vendorConfig:{terraform:{workflowTool:CUSTOM}}})` (don't pass `vcsIntegrationId` for the managed GitHub integration; the API rejects it) |
+| Env vars | `stackConfigAdd(stack, config:{id:"TF_CLI_ARGS_init", value, type:ENVIRONMENT_VARIABLE, writeOnly:false})` |
+| Attach integration | `awsIntegrationAttach(id, stack, read:true, write:true)`. Spacelift test-assumes the role here, so the bootstrap trust policy must already be applied |
+| Trigger a run | `runTrigger(stack, commitSha, runType:PROPOSED)` (plan only) or `TRACKED` |
+
+`awsIntegration(id){ externalIdForStack(stackId, read:true, write:true){ externalId assumeRolePolicyStatement } }`
+returns the exact trust statement Spacelift expects, which is a quick way to check `bootstrap/`.
+Confirming prod runs is deliberately left to a person in the UI.
+
+## Prod bring-up order
+
+Same as debug, but every run stops at **Unconfirmed**; review the plan and press **Confirm** in
+the UI. Verify the prod routes (same command with `environment=prod`) before confirming `prod-eks`.
+
 ## Free-plan feature check (pricing page, 2026-11-09)
 
 | Feature | Free? | Used? |
@@ -103,4 +134,5 @@ runs are serialized; trigger the next stack as soon as the previous one starts a
 | `terraform: not found` during apply | `before_apply` hook missing (check runtime config was picked up) |
 | `checksum MISMATCH` | Download corrupted or tampered with; the run stops on purpose. Retry; if persistent, investigate |
 | `drift-check: ... expected exactly "1.17.1"` | Someone changed one version location; update all of them together |
+| `unauthorized: you need to configure trust relationship` when attaching | Trust policy principal is for the wrong Spacelift region: `spacelift.io` = 324880187172, `us.spacelift.io` = 577638371743 |
 | `AccessDenied` on AssumeRole | Stack name doesn't match the trust policy's ExternalId pattern, or integration not attached |
