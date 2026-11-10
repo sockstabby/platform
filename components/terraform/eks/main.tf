@@ -25,6 +25,11 @@ data "aws_iam_role" "deploy" {
   name = "${local.name}-deploy"
 }
 
+# Created by bootstrap/.
+data "aws_iam_role" "spacelift" {
+  name = "${var.project}-spacelift"
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "21.29.0"
@@ -47,10 +52,22 @@ module "eks" {
   enabled_log_types           = []
   create_cloudwatch_log_group = false
 
-  # Spacelift's role creates the cluster; this gives it admin so it can manage the apps namespace.
-  enable_cluster_creator_admin_permissions = true
+  # Not using enable_cluster_creator_admin_permissions: it keys off whoever runs the plan, so a local
+  # plan (as the admin user) and a Spacelift plan (as the Spacelift role) would differ, and a local
+  # run would try to create a duplicate entry for the admin user. Name both principals explicitly.
+  enable_cluster_creator_admin_permissions = false
 
   access_entries = {
+    spacelift = {
+      # Spacelift's role applies this stack and creates the apps namespace via the kubernetes provider.
+      principal_arn = data.aws_iam_role.spacelift.arn
+      policy_associations = {
+        admin = {
+          policy_arn   = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = { type = "cluster" }
+        }
+      }
+    }
     admin = {
       principal_arn = var.admin_principal_arn
       policy_associations = {
