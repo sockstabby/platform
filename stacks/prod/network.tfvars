@@ -1,1 +1,1 @@
-# TODO(phase 4/6): prod network variables
+# TODO(phase 6): prod network values (differ from debug only in names, CIDRs, node count/size)

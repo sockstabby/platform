@@ -1,1 +1,11 @@
-# TODO(phase 4): network providers
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = {
+      project      = var.project
+      environment  = var.environment
+      "managed-by" = "terraform"
+    }
+  }
+}

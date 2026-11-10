@@ -54,16 +54,32 @@ For **each** stack (**Ship Infra → Stacks → Create stack**):
 
    | Variable | Value |
    |---|---|
-   | `TF_CLI_ARGS_init` | `-backend-config=../../../stacks/<env>/backend.hcl -backend-config=key=<env>/<component>.tfstate` |
+   | `TF_CLI_ARGS_init` | `-backend-config=key=<env>/<component>.tfstate` (bucket and region are fixed in each `backend.tf`) |
    | `TF_CLI_ARGS_plan` | `-var-file=../../../stacks/<env>/<component>.tfvars` |
    | `TF_CLI_ARGS_destroy` | `-var-file=../../../stacks/<env>/<component>.tfvars` |
 
    These are read by **Terraform itself**, not by Spacelift, so they work with the Custom tool
    (we control the exact commands in `workflow.yml`). Do **not** set `TF_CLI_ARGS_apply`:
    apply uses the saved plan file, which already contains the variables, and Terraform rejects
-   `-var-file` together with a saved plan. (Exact paths are finalized in Phase 4.)
+   `-var-file` together with a saved plan. Example for `debug-network`: `TF_CLI_ARGS_init=-backend-config=key=debug/network.tfstate`, `TF_CLI_ARGS_plan=-var-file=../../../stacks/debug/network.tfvars`.
 8. **Hooks**: nothing to add. Open **Settings → Customizing workflow** and check that the
    `before_init`, `before_apply` and `before_destroy` hooks from `.spacelift/config.yml` show up.
+
+## Debug bring-up order (one public worker: runs are serialized)
+
+1. `debug-network`. First run also proves the Custom tool works: in the run log look for
+   `[install-terraform] checksum OK` and `installed Terraform v1.17.1`.
+2. **Verify routes before EKS** (nodes can't join or pull from GHCR without them):
+   ```sh
+   export AWS_PROFILE=mod-cloud-stack AWS_REGION=us-east-2
+   VPC=$(aws ec2 describe-vpcs --filters Name=tag:project,Values=modern-cloud-stack Name=tag:environment,Values=debug --query 'Vpcs[0].VpcId' --output text)
+   aws ec2 describe-route-tables --filters Name=vpc-id,Values=$VPC --query 'RouteTables[].{rt:RouteTableId,subnets:Associations[].SubnetId,routes:Routes[].[DestinationCidrBlock,NatGatewayId,GatewayId,DestinationPrefixListId]}'
+   ```
+   Expect: the private route table has `0.0.0.0/0 -> nat-...` and an S3 prefix-list route (`pl-...`
+   -> `vpce-...`); the public one has `0.0.0.0/0 -> igw-...`.
+3. `debug-github-oidc` (quick).
+4. `debug-eks` (~15 min).
+5. `aws eks update-kubeconfig --region us-east-2 --name modern-cloud-stack-debug && kubectl get nodes`
 
 Apply order: `network → github-oidc → eks`. Destroy in reverse. One public worker on Free means
 runs are serialized; trigger the next stack as soon as the previous one starts applying.

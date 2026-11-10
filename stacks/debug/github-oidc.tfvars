@@ -1,1 +1,5 @@
-# TODO(phase 4/6): debug github-oidc variables
+region             = "us-east-2"
+environment        = "debug"
+github_environment = "debug"
+github_owner       = "sockstabby"
+github_owner_id    = "17520257"

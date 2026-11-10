@@ -2,6 +2,15 @@
 
 > Full README (architecture, design decisions, costs) is written in Phase 7.
 
+## Design note: the `apps` namespace is created by the eks component
+
+The eks component configures the `kubernetes` provider from the cluster it creates (token from
+`aws_eks_cluster_auth`) and creates the `apps` namespace, which the GitHub deploy role's access entry
+is scoped to (`AmazonEKSEditPolicy`, namespace `apps`). Configuring a provider from a cluster in the
+same configuration is a known caveat: it works for create and destroy but can fail if the cluster
+has to be replaced. Accepted here for one namespace; production would manage namespaces separately
+(GitOps / a second component).
+
 ## Design decision: Terraform via Spacelift's Custom workflow
 
 **Choice:** HashiCorp Terraform 1.17.1 (exact pin), run by Spacelift through its *Custom* workflow
