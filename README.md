@@ -42,6 +42,23 @@ commercially should check with their own counsel.
 **Production alternative:** bake Terraform into a custom runner image (no per-run download), or
 use OpenTofu, which Spacelift supports natively and which is a drop-in replacement.
 
+## Deploy workflow (`reusable-deploy.yml`, since v1.1.0)
+
+Called by an app's `deploy-*` workflow after `reusable-build`. It deploys an image that is already
+in GHCR (prod never rebuilds) to the environment's EKS cluster:
+OIDC → `aws eks update-kubeconfig` → `helm upgrade --install --rollback-on-failure --wait`.
+
+- **Caller grants** `contents: read`, `id-token: write`.
+- **Inputs:** `environment`, `image-name`, `image-tag`, `values-file` (required); `release-name`,
+  `chart-path`, `namespace` (`apps`), `aws-region` (`us-east-2`), `timeout` (`5m`).
+- **GitHub Environment variables** in the app repo (not secrets; nothing here is sensitive):
+  `AWS_ROLE_ARN` (from the `github-oidc` component output) and `EKS_CLUSTER_NAME`.
+- The job sets `environment:` itself (a calling job can't), which is what puts
+  `:environment:<name>` in the OIDC `sub` claim the role trusts. Verified in
+  [docs/oidc-verification.md](docs/oidc-verification.md).
+- The deploy role can write only in `apps` and cannot create namespaces, so there is no
+  `--create-namespace`; the namespace is created by the `eks` component.
+
 ## Reusable workflow versioning
 
 App repos call the workflows in this repo by **major tag**, e.g.

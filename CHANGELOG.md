@@ -8,5 +8,5 @@ the floating `v1` tag is never moved onto a breaking change.
 
 | Tag | Date | Breaking? | Changes |
 |---|---|---|---|
-| _Unreleased_ | 2026-11-09 | No (infra only) | IaC tool switched from OpenTofu to HashiCorp Terraform 1.17.1, run by Spacelift's Custom workflow tool (`.spacelift/`). Version drift check added. No reusable-workflow changes, so no tag. |
+| `v1.1.0` | 2026-11-09 | No (new workflow) | Adds `reusable-deploy.yml`: OIDC role from the caller's GitHub Environment (`AWS_ROLE_ARN`, `EKS_CLUSTER_NAME`), `aws eks update-kubeconfig`, `helm upgrade --install --rollback-on-failure --wait` (Helm 4's replacement for `--atomic`). Existing inputs of v1.0.0 workflows unchanged. Also includes the infra-only changes since v1.0.0: OpenTofu → HashiCorp Terraform 1.17.1 via Spacelift's Custom workflow tool (`.spacelift/`), version drift check, network/github-oidc/eks components and debug stacks. |
 | `v1.0.0` | 2026-11-09 | No (initial) | `reusable-build.yml` (build, optional push to GHCR), `reusable-chart-test.yml` (helm lint + kind install + `/healthz` smoke test) |
